@@ -40,7 +40,7 @@ export const registerSchema = z.object({
         .string()
         .min(1, 'Please confirm your password'),
     role: z.enum(['student', 'instructor'], {
-        errorMap: () => ({ message: 'Please select a role' }),
+        message: 'Please select a role',
     }),
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -63,10 +63,8 @@ export const courseSchema = z.object({
         .min(10, 'Description must be at least 10 characters')
         .max(2000, 'Description must not exceed 2000 characters'),
     thumbnail_url: z
-        .string()
-        .url('Invalid URL')
-        .optional()
-        .or(z.literal('')),
+        .union([z.string().url('Invalid URL'), z.literal('')])
+        .optional(),
     is_free: z.boolean().default(true),
     price: z
         .number()
@@ -90,10 +88,8 @@ export const lessonSchema = z.object({
         .min(1, 'Content is required')
         .min(10, 'Content must be at least 10 characters'),
     video_url: z
-        .string()
-        .url('Invalid URL')
-        .optional()
-        .or(z.literal('')),
+        .union([z.string().url('Invalid URL'), z.literal('')])
+        .optional(),
     duration_minutes: z
         .number()
         .min(1, 'Duration must be at least 1 minute')
