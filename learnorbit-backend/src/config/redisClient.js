@@ -13,12 +13,16 @@ const redisConfig = {
   port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379,
   password: process.env.REDIS_PASSWORD || undefined,
   retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
+    // Stop retrying quickly if local dev and no redis
+    if (process.env.NODE_ENV !== 'production' && times > 5) {
+      return 30000; // Wait 30s between retries if local
+    }
+    const delay = Math.min(times * 100, 3000);
     return delay;
   },
-  maxRetriesPerRequest: 3,
-  enableReadyCheck: true,
-  lazyConnect: false,
+  maxRetriesPerRequest: null, // Allow queuing commands while disconnected
+  enableReadyCheck: false,
+  lazyConnect: true, // Important: Don't crash app start if Redis is down
 };
 
 const redis = new Redis(redisConfig);

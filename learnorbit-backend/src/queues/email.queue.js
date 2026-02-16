@@ -14,24 +14,30 @@ const logger = require('../utils/logger');
  */
 
 // Create email queue with Redis connection
-const emailQueue = new Queue('email', {
-    connection: redisClient,
-    defaultJobOptions: {
-        attempts: 3,                    // Retry up to 3 times
-        backoff: {
-            type: 'exponential',          // Exponential backoff
-            delay: 2000,                  // Start with 2 seconds
+let emailQueue;
+
+try {
+    // Only initialize real queue if we expect Redis to work
+    emailQueue = new Queue('email', {
+        connection: redisClient,
+        defaultJobOptions: {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2000 },
+            removeOnComplete: { age: 24 * 3600, count: 1000 },
+            removeOnFail: { age: 7 * 24 * 3600, count: 5000 },
         },
-        removeOnComplete: {
-            age: 24 * 3600,               // Keep completed jobs for 24 hours
-            count: 1000,                  // Keep last 1000 completed jobs
-        },
-        removeOnFail: {
-            age: 7 * 24 * 3600,           // Keep failed jobs for 7 days
-            count: 5000,                  // Keep last 5000 failed jobs
-        },
-    },
-});
+    });
+
+    // Attach error handler to prevent unhandled rejection crashes
+    emailQueue.on('error', (err) => {
+        // logger.error('Email Queue Error:', err.message); 
+        // check connection
+    });
+
+} catch (err) {
+    logger.error('Failed to initialize email queue', err);
+    // Fallback?
+}
 
 /**
  * Add a contact notification email job to the queue
@@ -190,36 +196,40 @@ async function addPaidEnrollmentJob(data) {
     }
 }
 
-emailQueue.on('error', (error) => {
-    logger.error(`Email queue error: ${error.message}`, { error: error.stack });
-});
 
-emailQueue.on('waiting', (jobId) => {
-    logger.debug(`Job ${jobId} is waiting`);
-});
+// Only attach listeners if it's a real queue (has .on method)
+if (emailQueue.on) {
+    emailQueue.on('error', (error) => {
+        logger.error(`Email queue error: ${error.message}`, { error: error.stack });
+    });
 
-emailQueue.on('active', (job) => {
-    logger.debug(`Job ${job.id} is now active`);
-});
+    emailQueue.on('waiting', (jobId) => {
+        logger.debug(`Job ${jobId} is waiting`);
+    });
 
-emailQueue.on('stalled', (jobId) => {
-    logger.warn(`Job ${jobId} has stalled`);
-});
+    emailQueue.on('active', (job) => {
+        logger.debug(`Job ${job.id} is now active`);
+    });
 
-emailQueue.on('progress', (job, progress) => {
-    logger.debug(`Job ${job.id} progress: ${progress}%`);
-});
+    emailQueue.on('stalled', (jobId) => {
+        logger.warn(`Job ${jobId} has stalled`);
+    });
+
+    emailQueue.on('progress', (job, progress) => {
+        logger.debug(`Job ${job.id} progress: ${progress}%`);
+    });
+}
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, closing email queue...');
-    await emailQueue.close();
+    if (emailQueue.close) await emailQueue.close();
     logger.info('Email queue closed');
 });
 
 process.on('SIGINT', async () => {
     logger.info('SIGINT received, closing email queue...');
-    await emailQueue.close();
+    if (emailQueue.close) await emailQueue.close();
     logger.info('Email queue closed');
 });
 
