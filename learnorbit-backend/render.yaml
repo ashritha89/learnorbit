@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: learnorbit-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node src/app.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+    autoDeploy: false
+    # Specify the version of Node if needed, or rely on package.json engines
+    # branch: main

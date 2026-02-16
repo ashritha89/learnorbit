@@ -20,6 +20,7 @@ const lessonRoutes = require('./modules/lessons/lesson.routes');
 const authRoutes = require('./routes/auth.routes');
 const contactRoutes = require('./routes/contact.routes');
 const uploadRoutes = require('./modules/upload/upload.routes');
+const marketingRoutes = require('./modules/marketing/marketing.routes');
 
 const app = express();
 
@@ -61,7 +62,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // Mount feature routes
-app.use('/api', uploadRoutes); // mounts at /api/upload
+app.use('/api', uploadRoutes);
+app.use('/api/marketing', marketingRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api', enrollmentRoutes);
 app.use('/api', progressRoutes);
