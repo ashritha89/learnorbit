@@ -1,6 +1,6 @@
 // src/controllers/course.controller.js
 const pool = require('../config/database');
-const redis = require('../config/redisClient');
+// const redis = require('../config/redisClient');
 const logger = require('../utils/logger');
 
 // Cache configuration
@@ -19,14 +19,7 @@ function validateCoursePayload(payload) {
 
 /** Helper to invalidate course cache */
 async function invalidateCourseCache() {
-  try {
-    if (redis.isConnected()) {
-      await redis.del(CACHE_KEY_ALL_COURSES);
-      logger.info('Course cache invalidated');
-    }
-  } catch (err) {
-    logger.error(`Failed to invalidate course cache: ${err.message}`);
-  }
+  // Redis removed
 }
 
 /** ---------- PUBLIC ENDPOINTS ---------- */
@@ -38,13 +31,7 @@ async function invalidateCourseCache() {
 exports.getAllCourses = async (req, res, next) => {
   try {
     // Try cache first
-    if (redis.isConnected()) {
-      const cached = await redis.get(CACHE_KEY_ALL_COURSES);
-      if (cached) {
-        logger.info('Course data served from cache', { requestId: req.id });
-        return res.json({ success: true, data: JSON.parse(cached), cached: true });
-      }
-    }
+    // Redis removed
 
     // Fetch from database
     const { rows } = await pool.query(
@@ -52,10 +39,7 @@ exports.getAllCourses = async (req, res, next) => {
     );
 
     // Store in cache for 5 minutes
-    if (redis.isConnected()) {
-      await redis.setex(CACHE_KEY_ALL_COURSES, CACHE_TTL, JSON.stringify(rows));
-      logger.info('Course data cached', { requestId: req.id, count: rows.length });
-    }
+    // Redis removed
 
     res.json({ success: true, data: rows, cached: false });
   } catch (err) {

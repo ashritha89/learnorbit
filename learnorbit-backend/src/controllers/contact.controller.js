@@ -1,6 +1,6 @@
 // src/controllers/contact.controller.js
 const pool = require('../config/database');
-const { addContactEmailJob } = require('../queues/email.queue');
+// const { addContactEmailJob } = require('../queues/email.queue');
 const logger = require('../utils/logger');
 
 // POST /api/contact controller
@@ -13,17 +13,17 @@ module.exports = async function createContact(req, res) {
     const { rows } = await pool.query(sql, [name, email, message || null]);
     const leadId = rows[0].id;
 
-    // 2. Add email job to queue (non-blocking)
+    // 2. Add email job to queue (non-blocking) - NOW DIRECT SEND
     // This happens asynchronously and won't delay the API response
-    addContactEmailJob({
+    const emailService = require('../utils/email.service');
+    emailService.sendContactNotification({
       name,
       email,
       message: message || '',
       leadId,
     }).catch((error) => {
       // Log error but don't fail the request
-      // The contact is already saved, email is secondary
-      logger.error(`Failed to queue contact email for lead ${leadId}`, {
+      logger.error(`Failed to send contact email for lead ${leadId}`, {
         error: error.message,
         leadId,
         email,

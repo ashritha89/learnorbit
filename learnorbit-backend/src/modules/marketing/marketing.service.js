@@ -1,7 +1,7 @@
 const path = require('path');
 const pool = require('../../config/database');
 
-const { addWaitlistEmailJob } = require('../../queues/email.queue');
+// const { addWaitlistEmailJob } = require('../../queues/email.queue');
 
 class MarketingService {
     async addToWaitlist(data) {
@@ -50,8 +50,12 @@ class MarketingService {
         }
 
         try {
-            // Add email job to queue - but don't fail the request if Redis is down
-            await addWaitlistEmailJob({
+            // Send waitlist email directly (async, non-blocking if possible, but cleaner for now to just await or not await)
+            const emailService = require('../../utils/email.service');
+            // We can await it or let it run in background. Since user wants to remove Redis, we process it now.
+            // To prevent blocking response too long, maybe don't await? But for reliability without queue, awaiting is safer.
+            // Or use setImmediate.
+            emailService.sendWaitlistEmail({
                 fullName,
                 email,
                 role,
@@ -62,9 +66,10 @@ class MarketingService {
                 earlyAccessInterest,
                 betaTester,
                 source
-            });
-        } catch (queueError) {
-            console.error('Failed to queue waitlist email (non-fatal):', queueError.message);
+            }).catch(err => console.error('Background email send failed:', err));
+
+        } catch (emailError) {
+            console.error('Failed to initiate waitlist email:', emailError);
         }
 
         return { id, email, status: 'new' };

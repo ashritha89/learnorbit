@@ -9,7 +9,7 @@ const path = require('path');
 
 const requestIdMiddleware = require('./middlewares/requestId.middleware');
 const logger = require('./utils/logger');
-const redisRateLimiter = require('./middlewares/redisRateLimiter.middleware');
+// const redisRateLimiter = require('./middlewares/redisRateLimiter.middleware');
 
 const dashboardRoutes = require('./modules/dashboard/dashboard.routes');
 const courseRoutes = require('./modules/courses/course.routes');
@@ -52,7 +52,7 @@ app.use(morgan('combined', {
 }));
 
 // Distributed rate limiting via Redis
-app.use(redisRateLimiter);
+// app.use(redisRateLimiter);
 
 // Serve uploads directory specifically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -124,11 +124,11 @@ if (require.main === module) {
       logger.info('HTTP server closed');
 
       // Close Redis connection
-      const redisClient = require('./config/redis');
-      if (redisClient && redisClient.status === 'ready') {
-        await redisClient.quit();
-        logger.info('Redis connection closed');
-      }
+      // const redisClient = require('./config/redis');
+      // if (redisClient && redisClient.status === 'ready') {
+      //   await redisClient.quit();
+      //   logger.info('Redis connection closed');
+      // }
 
       process.exit(0);
     });
