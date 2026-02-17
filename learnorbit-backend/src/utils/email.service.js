@@ -86,12 +86,13 @@ class EmailService {
             </html>
           `;
 
-      await this.transporter.sendMail({
+      const info = await this.transporter.sendMail({
         from: `"LearnOrbit" <${process.env.SMTP_USER}>`,
         to: email,
         subject,
         html: body
       });
+      logger.info(`Waitlist email sent to ${email} - MessageID: ${info.messageId}`);
 
       // Send Admin Notification
       const adminSubject = `New Waitlist Signup: ${fullName}`;
@@ -111,12 +112,13 @@ class EmailService {
           `;
 
       const adminEmail = process.env.ADMIN_EMAIL || 'admin@learnorbit.com';
-      await this.transporter.sendMail({
+      const adminInfo = await this.transporter.sendMail({
         from: `"LearnOrbit System" <${process.env.SMTP_USER}>`,
         to: adminEmail,
         subject: adminSubject,
         html: adminBody
       });
+      logger.info(`Admin notification sent to ${adminEmail} - MessageID: ${adminInfo.messageId}`);
 
       logger.info(`Waitlist confirmation sent to ${email} and admin notification sent.`);
       return true;
