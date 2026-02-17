@@ -1,5 +1,5 @@
 // src/repositories/refreshToken.repository.js
-const pool = require('../config/db');
+const pool = require('../config/database');
 const logger = require('../utils/logger');
 
 /**
@@ -21,10 +21,11 @@ class RefreshTokenRepository {
     try {
       const sql = `
         INSERT INTO refresh_tokens (user_id, token, expires_at, ip_address, user_agent)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
       `;
 
-      const [result] = await pool.execute(sql, [
+      const { rows } = await pool.query(sql, [
         userId,
         token,
         expiresAt,
@@ -34,11 +35,11 @@ class RefreshTokenRepository {
 
       logger.info(`Refresh token created`, {
         userId,
-        tokenId: result.insertId,
+        tokenId: rows[0].id,
         ip,
       });
 
-      return result.insertId;
+      return rows[0].id;
     } catch (error) {
       logger.error(`Failed to create refresh token: ${error.message}`, {
         userId,
@@ -61,10 +62,10 @@ class RefreshTokenRepository {
           revoked, revoked_at, replaced_by_token,
           ip_address, user_agent
         FROM refresh_tokens
-        WHERE token = ? AND revoked = FALSE AND expires_at > NOW()
+        WHERE token = $1 AND revoked = FALSE AND expires_at > NOW()
       `;
 
-      const [rows] = await pool.execute(sql, [token]);
+      const { rows } = await pool.query(sql, [token]);
       return rows.length > 0 ? rows[0] : null;
     } catch (error) {
       logger.error(`Failed to find refresh token: ${error.message}`, {
@@ -87,11 +88,11 @@ class RefreshTokenRepository {
         UPDATE refresh_tokens
         SET revoked = TRUE, 
             revoked_at = NOW(),
-            replaced_by_token = ?
-        WHERE token = ?
+            replaced_by_token = $1
+        WHERE token = $2
       `;
 
-      await pool.execute(sql, [replacedByToken, token]);
+      await pool.query(sql, [replacedByToken, token]);
 
       logger.info(`Refresh token revoked`, {
         ip,
@@ -115,14 +116,14 @@ class RefreshTokenRepository {
       const sql = `
         UPDATE refresh_tokens
         SET revoked = TRUE, revoked_at = NOW()
-        WHERE user_id = ? AND revoked = FALSE
+        WHERE user_id = $1 AND revoked = FALSE
       `;
 
-      const [result] = await pool.execute(sql, [userId]);
+      const result = await pool.query(sql, [userId]);
 
       logger.info(`All refresh tokens revoked for user`, {
         userId,
-        count: result.affectedRows,
+        count: result.rowCount,
       });
     } catch (error) {
       logger.error(`Failed to revoke all tokens: ${error.message}`, {
@@ -141,16 +142,16 @@ class RefreshTokenRepository {
     try {
       const sql = `
         DELETE FROM refresh_tokens
-        WHERE expires_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
+        WHERE expires_at < NOW() - INTERVAL '30 days'
       `;
 
-      const [result] = await pool.execute(sql);
+      const result = await pool.query(sql);
 
       logger.info(`Expired refresh tokens cleaned up`, {
-        count: result.affectedRows,
+        count: result.rowCount,
       });
 
-      return result.affectedRows;
+      return result.rowCount;
     } catch (error) {
       logger.error(`Failed to cleanup expired tokens: ${error.message}`, {
         error: error.stack,
@@ -170,11 +171,11 @@ class RefreshTokenRepository {
         SELECT 
           id, created_at, expires_at, ip_address, user_agent
         FROM refresh_tokens
-        WHERE user_id = ? AND revoked = FALSE AND expires_at > NOW()
+        WHERE user_id = $1 AND revoked = FALSE AND expires_at > NOW()
         ORDER BY created_at DESC
       `;
 
-      const [rows] = await pool.execute(sql, [userId]);
+      const { rows } = await pool.query(sql, [userId]);
       return rows;
     } catch (error) {
       logger.error(`Failed to get active sessions: ${error.message}`, {

@@ -14,6 +14,12 @@ const logger = require('../utils/logger');
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_REQUESTS = 100;
 
+// Helper for timeout
+const withTimeout = (promise, ms) => Promise.race([
+  promise,
+  new Promise((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), ms))
+]);
+
 module.exports = async (req, res, next) => {
   try {
     // Check if Redis is connected
@@ -25,16 +31,16 @@ module.exports = async (req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress;
     const key = `rl:${ip}`;
 
-    // Increment request count
-    const current = await redis.incr(key);
+    // Increment request count with timeout
+    const current = await withTimeout(redis.incr(key), 1000);
 
-    // Set TTL on first request
+    // Set TTL on first request (fire and forget or timeout, but don't block main flow too long)
     if (current === 1) {
-      await redis.pexpire(key, WINDOW_MS);
+      withTimeout(redis.pexpire(key, WINDOW_MS), 1000).catch(err => logger.warn('Failed to set rate limit expiry', err));
     }
 
     // Get TTL for Retry-After header
-    const ttl = await redis.pttl(key);
+    const ttl = await withTimeout(redis.pttl(key), 1000).catch(() => WINDOW_MS);
 
     // Check if limit exceeded
     if (current > MAX_REQUESTS) {

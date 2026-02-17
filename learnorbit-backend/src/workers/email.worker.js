@@ -69,7 +69,7 @@ async function sendEmail(to, subject, body) {
  * @param {Object} data - Job data
  */
 async function processWaitlistEmail(data) {
-  const { fullName, email } = data;
+  const { fullName, email, role, currentPlatform, pricingExpectation } = data;
 
   const subject = 'Welcome to the LearnOrbit Waitlist! 🚀';
   const body = `
@@ -113,8 +113,29 @@ async function processWaitlistEmail(data) {
 
   await sendEmail(email, subject, body);
 
+  // Send Admin Notification
+  const adminSubject = `New Waitlist Signup: ${fullName}`;
+  const adminBody = `
+    <!DOCTYPE html>
+    <html>
+    <body>
+      <h2>New Waitlist Signup 🚀</h2>
+      <p><strong>Name:</strong> ${fullName}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Role:</strong> ${role || 'N/A'}</p>
+      <p><strong>Current Platform:</strong> ${currentPlatform || 'None'}</p>
+      <p><strong>Pricing Expectation:</strong> ${pricingExpectation || 'N/A'}</p>
+      <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+    </body>
+    </html>
+  `;
+
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@learnorbit.com';
+  await sendEmail(adminEmail, adminSubject, adminBody);
+
   return {
     emailSent: true,
+    adminNotificationSent: true,
     recipient: email,
   };
 }

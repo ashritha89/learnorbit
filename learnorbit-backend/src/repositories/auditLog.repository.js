@@ -1,5 +1,5 @@
 // src/repositories/auditLog.repository.js
-const pool = require('../config/db');
+const pool = require('../config/database');
 const logger = require('../utils/logger');
 
 /**
@@ -21,12 +21,13 @@ class AuditLogRepository {
     try {
       const sql = `
         INSERT INTO audit_logs (user_id, event_type, ip_address, user_agent, details)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
       `;
 
       const detailsJson = details ? JSON.stringify(details) : null;
 
-      const [result] = await pool.execute(sql, [
+      const { rows } = await pool.query(sql, [
         userId,
         eventType,
         ip,
@@ -34,7 +35,7 @@ class AuditLogRepository {
         detailsJson,
       ]);
 
-      return result.insertId;
+      return rows[0].id;
     } catch (error) {
       // Don't throw - audit logging shouldn't break the application
       logger.error(`Failed to create audit log: ${error.message}`, {
@@ -58,12 +59,12 @@ class AuditLogRepository {
       const sql = `
         SELECT id, event_type, ip_address, user_agent, details, created_at
         FROM audit_logs
-        WHERE user_id = ?
+        WHERE user_id = $1
         ORDER BY created_at DESC
-        LIMIT ? OFFSET ?
+        LIMIT $2 OFFSET $3
       `;
 
-      const [rows] = await pool.execute(sql, [userId, limit, offset]);
+      const { rows } = await pool.query(sql, [userId, limit, offset]);
       return rows.map(row => ({
         ...row,
         details: row.details ? JSON.parse(row.details) : null,
@@ -88,12 +89,12 @@ class AuditLogRepository {
       const sql = `
         SELECT id, user_id, ip_address, user_agent, details, created_at
         FROM audit_logs
-        WHERE event_type = ?
+        WHERE event_type = $1
         ORDER BY created_at DESC
-        LIMIT ?
+        LIMIT $2
       `;
 
-      const [rows] = await pool.execute(sql, [eventType, limit]);
+      const { rows } = await pool.query(sql, [eventType, limit]);
       return rows.map(row => ({
         ...row,
         details: row.details ? JSON.parse(row.details) : null,
@@ -116,17 +117,17 @@ class AuditLogRepository {
     try {
       const sql = `
         DELETE FROM audit_logs
-        WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+        WHERE created_at < NOW() - make_interval(days => $1)
       `;
 
-      const [result] = await pool.execute(sql, [daysToKeep]);
+      const result = await pool.query(sql, [daysToKeep]);
 
       logger.info(`Audit logs cleaned up`, {
         daysToKeep,
-        count: result.affectedRows,
+        count: result.rowCount,
       });
 
-      return result.affectedRows;
+      return result.rowCount;
     } catch (error) {
       logger.error(`Failed to cleanup audit logs: ${error.message}`, {
         error: error.stack,

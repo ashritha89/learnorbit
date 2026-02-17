@@ -1,5 +1,5 @@
 // src/modules/progress/progress.repository.js
-const pool = require('../../config/db');
+const pool = require('../../config/database');
 const logger = require('../../utils/logger');
 
 class ProgressRepository {
@@ -14,15 +14,16 @@ class ProgressRepository {
   async upsert(userId, lessonId, completed, watchPercentage) {
     const sql = `
       INSERT INTO lesson_progress (user_id, lesson_id, completed, watch_percentage)
-      VALUES (?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE 
-        completed = VALUES(completed), 
-        watch_percentage = VALUES(watch_percentage), 
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (user_id, lesson_id) 
+      DO UPDATE SET 
+        completed = EXCLUDED.completed, 
+        watch_percentage = EXCLUDED.watch_percentage, 
         updated_at = CURRENT_TIMESTAMP
     `;
-    const params = [userId, lessonId, completed ? 1 : 0, watchPercentage];
-    const [result] = await pool.execute(sql, params);
-    return result.affectedRows;
+    const params = [userId, lessonId, !!completed, watchPercentage]; // Ensure boolean
+    const result = await pool.query(sql, params);
+    return result.rowCount;
   }
 
   /**
@@ -37,15 +38,15 @@ class ProgressRepository {
       SELECT 
         l.id AS lesson_id, 
         l.order_index,
-        COALESCE(lp.completed, 0) AS completed, 
+        COALESCE(lp.completed, FALSE) AS completed, 
         COALESCE(lp.watch_percentage, 0) AS watch_percentage,
         lp.updated_at
       FROM lessons l
-      LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = ?
-      WHERE l.course_id = ? AND l.is_deleted = FALSE
+      LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+      WHERE l.course_id = $2 AND l.is_deleted = FALSE
       ORDER BY l.order_index ASC
     `;
-    const [rows] = await pool.execute(sql, [userId, courseId]);
+    const { rows } = await pool.query(sql, [userId, courseId]);
     return rows;
   }
 
@@ -61,10 +62,10 @@ class ProgressRepository {
             COUNT(l.id) as total_lessons,
             COUNT(lp.id) as completed_lessons
         FROM lessons l
-        LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = ? AND lp.completed = 1
-        WHERE l.course_id = ? AND l.is_deleted = FALSE
+        LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1 AND lp.completed = TRUE
+        WHERE l.course_id = $2 AND l.is_deleted = FALSE
     `;
-    const [rows] = await pool.execute(sql, [userId, courseId]);
+    const { rows } = await pool.query(sql, [userId, courseId]);
     return rows[0];
   }
 }

@@ -3,6 +3,7 @@ const logger = require('../../utils/logger');
 
 // Add Waitlist User
 exports.addToWaitlist = async (req, res) => {
+    logger.info('Received waitlist request', { body: req.body });
     try {
         const { fullName, email, role } = req.body;
 
@@ -24,7 +25,7 @@ exports.addToWaitlist = async (req, res) => {
             message: 'Successfully joined waitlist.'
         });
     } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') {
+        if (error.code === '23505') {
             return res.status(409).json({ success: false, message: 'You are already on the waitlist.' });
         }
 

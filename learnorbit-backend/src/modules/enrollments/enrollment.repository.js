@@ -1,5 +1,5 @@
 // src/modules/enrollments/enrollment.repository.js
-const pool = require('../../config/db');
+const pool = require('../../config/database');
 const logger = require('../../utils/logger');
 
 class EnrollmentRepository {
@@ -11,9 +11,9 @@ class EnrollmentRepository {
    * @returns {Promise<number>} - Insert ID
    */
   async create(userId, courseId, status = 'active') {
-    const sql = `INSERT INTO enrollments (user_id, course_id, status) VALUES (?, ?, ?)`;
-    const [result] = await pool.execute(sql, [userId, courseId, status]);
-    return result.insertId;
+    const sql = `INSERT INTO enrollments (user_id, course_id, status) VALUES ($1, $2, $3) RETURNING id`;
+    const { rows } = await pool.query(sql, [userId, courseId, status]);
+    return rows[0].id;
   }
 
   /**
@@ -23,8 +23,8 @@ class EnrollmentRepository {
    * @returns {Promise<boolean>}
    */
   async exists(userId, courseId) {
-    const sql = `SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?`;
-    const [rows] = await pool.execute(sql, [userId, courseId]);
+    const sql = `SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2`;
+    const { rows } = await pool.query(sql, [userId, courseId]);
     return rows.length > 0;
   }
 
@@ -35,8 +35,8 @@ class EnrollmentRepository {
    * @returns {Promise<string|null>}
    */
   async getStatus(userId, courseId) {
-    const sql = `SELECT status FROM enrollments WHERE user_id = ? AND course_id = ?`;
-    const [rows] = await pool.execute(sql, [userId, courseId]);
+    const sql = `SELECT status FROM enrollments WHERE user_id = $1 AND course_id = $2`;
+    const { rows } = await pool.query(sql, [userId, courseId]);
     if (rows.length === 0) return null;
     return rows[0].status;
   }
@@ -51,29 +51,29 @@ class EnrollmentRepository {
       SELECT e.*, u.name as student_name, u.email as student_email 
       FROM enrollments e 
       JOIN users u ON e.user_id = u.id 
-      WHERE e.course_id = ?
+      WHERE e.course_id = $1
       ORDER BY e.created_at DESC
     `;
-    const [rows] = await pool.execute(sql, [courseId]);
+    const { rows } = await pool.query(sql, [courseId]);
     return rows;
   }
 
   async findById(id) {
-    const sql = `SELECT * FROM enrollments WHERE id = ?`;
-    const [rows] = await pool.execute(sql, [id]);
+    const sql = `SELECT * FROM enrollments WHERE id = $1`;
+    const { rows } = await pool.query(sql, [id]);
     return rows[0] || null;
   }
 
   async updateStatus(enrollmentId, status) {
-    const sql = `UPDATE enrollments SET status = ? WHERE id = ?`;
-    const [result] = await pool.execute(sql, [status, enrollmentId]);
-    return result.affectedRows;
+    const sql = `UPDATE enrollments SET status = $1 WHERE id = $2`;
+    const result = await pool.query(sql, [status, enrollmentId]);
+    return result.rowCount;
   }
 
   async deleteEnrollment(enrollmentId) {
-    const sql = `DELETE FROM enrollments WHERE id = ?`;
-    const [result] = await pool.execute(sql, [enrollmentId]);
-    return result.affectedRows;
+    const sql = `DELETE FROM enrollments WHERE id = $1`;
+    const result = await pool.query(sql, [enrollmentId]);
+    return result.rowCount;
   }
 }
 

@@ -1,40 +1,44 @@
 const fs = require('fs');
 const path = require('path');
-const mysql = require('mysql2/promise');
+const { Client } = require('pg');
 const logger = require('./logger');
+require('dotenv').config();
 
 async function runAutoMigration() {
-    let connection;
+    let client;
     try {
-        const sqlPath = path.join(__dirname, '../../sql/create_marketing_tables.sql');
+        const sqlPath = path.join(__dirname, '../../migrations/init.sql');
         if (!fs.existsSync(sqlPath)) {
             logger.warn('Migration file not found: ' + sqlPath);
             return;
         }
 
         const sql = fs.readFileSync(sqlPath, 'utf8');
-        logger.info('Running auto-migration for marketing tables...');
+        logger.info('Running auto-migration for PostgreSQL tables...');
 
-        // Connect specifically for migration with multipleStatements enabled
-        connection = await mysql.createConnection({
+        client = new Client({
             host: process.env.DB_HOST,
             port: process.env.DB_PORT,
             user: process.env.DB_USER,
             password: process.env.DB_PASSWORD,
             database: process.env.DB_NAME,
-            ssl: process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production'
-                ? { rejectUnauthorized: false }
-                : undefined,
-            multipleStatements: true
+            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
         });
 
-        await connection.query(sql);
+        await client.connect();
+
+        // Split and execute statements logic is tricky with node-postgres if not using a library
+        // But simply executing the whole file content in one query usually works if it contains multiple statements separated by semicolons, 
+        // provided the driver supports it? 'pg' does support multiple statements in query if passed as a single string.
+
+        await client.query(sql);
+
         logger.info('Auto-migration completed successfully.');
 
     } catch (error) {
         logger.error('Auto-migration failed: ' + error.message);
     } finally {
-        if (connection) await connection.end();
+        if (client) await client.end();
     }
 }
 

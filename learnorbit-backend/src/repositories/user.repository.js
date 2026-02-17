@@ -1,5 +1,5 @@
 // src/repositories/user.repository.js
-const pool = require('../config/db');
+const pool = require('../config/database');
 const logger = require('../utils/logger');
 
 /**
@@ -25,10 +25,11 @@ class UserRepository {
           expertise, years_of_experience, linkedin_url,
           enrollment_date, student_id,
           avatar_url, bio, phone
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        RETURNING id
       `;
 
-            const [result] = await pool.execute(sql, [
+            const { rows } = await pool.query(sql, [
                 name,
                 email,
                 passwordHash,
@@ -47,12 +48,12 @@ class UserRepository {
             ]);
 
             logger.info(`User created successfully`, {
-                userId: result.insertId,
+                userId: rows[0].id,
                 email,
                 role,
             });
 
-            return result.insertId;
+            return rows[0].id;
         } catch (error) {
             logger.error(`Failed to create user: ${error.message}`, {
                 email,
@@ -80,10 +81,10 @@ class UserRepository {
           enrollment_date, student_id,
           created_at, updated_at, last_login_at
         FROM users
-        WHERE email = ?
+        WHERE email = $1
       `;
 
-            const [rows] = await pool.execute(sql, [email]);
+            const { rows } = await pool.query(sql, [email]);
             return rows.length > 0 ? rows[0] : null;
         } catch (error) {
             logger.error(`Failed to find user by email: ${error.message}`, {
@@ -110,10 +111,10 @@ class UserRepository {
           enrollment_date, student_id,
           created_at, updated_at, last_login_at
         FROM users
-        WHERE id = ?
+        WHERE id = $1
       `;
 
-            const [rows] = await pool.execute(sql, [id]);
+            const { rows } = await pool.query(sql, [id]);
             return rows.length > 0 ? rows[0] : null;
         } catch (error) {
             logger.error(`Failed to find user by ID: ${error.message}`, {
@@ -143,7 +144,7 @@ class UserRepository {
 
             Object.keys(updates).forEach(key => {
                 if (allowedFields.includes(key)) {
-                    fields.push(`${key} = ?`);
+                    fields.push(`${key} = $${values.length + 1}`);
                     values.push(updates[key]);
                 }
             });
@@ -154,15 +155,15 @@ class UserRepository {
 
             values.push(id);
 
-            const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
-            const [result] = await pool.execute(sql, values);
+            const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}`;
+            const result = await pool.query(sql, values);
 
             logger.info(`User updated successfully`, {
                 userId: id,
                 fieldsUpdated: fields.length,
             });
 
-            return result.affectedRows > 0;
+            return result.rowCount > 0;
         } catch (error) {
             logger.error(`Failed to update user: ${error.message}`, {
                 userId: id,
@@ -180,12 +181,12 @@ class UserRepository {
      */
     static async updatePassword(id, passwordHash) {
         try {
-            const sql = `UPDATE users SET password_hash = ? WHERE id = ?`;
-            const [result] = await pool.execute(sql, [passwordHash, id]);
+            const sql = `UPDATE users SET password_hash = $1 WHERE id = $2`;
+            const result = await pool.query(sql, [passwordHash, id]);
 
             logger.info(`Password updated successfully`, { userId: id });
 
-            return result.affectedRows > 0;
+            return result.rowCount > 0;
         } catch (error) {
             logger.error(`Failed to update password: ${error.message}`, {
                 userId: id,
@@ -215,9 +216,9 @@ class UserRepository {
             const sql = `
         UPDATE users 
         SET failed_login_attempts = failed_login_attempts + 1 
-        WHERE id = ?
+        WHERE id = $1
       `;
-            await pool.execute(sql, [id]);
+            await pool.query(sql, [id]);
 
             logger.warn(`Failed login attempt incremented`, { userId: id });
         } catch (error) {
@@ -237,8 +238,8 @@ class UserRepository {
      */
     static async lockAccount(id, lockUntil) {
         try {
-            const sql = `UPDATE users SET locked_until = ? WHERE id = ?`;
-            await pool.execute(sql, [lockUntil, id]);
+            const sql = `UPDATE users SET locked_until = $1 WHERE id = $2`;
+            await pool.query(sql, [lockUntil, id]);
 
             logger.warn(`Account locked`, {
                 userId: id,
@@ -263,9 +264,9 @@ class UserRepository {
             const sql = `
         UPDATE users 
         SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW()
-        WHERE id = ?
+        WHERE id = $1
       `;
-            await pool.execute(sql, [id]);
+            await pool.query(sql, [id]);
 
             logger.info(`Failed login attempts reset`, { userId: id });
         } catch (error) {
@@ -288,10 +289,10 @@ class UserRepository {
         try {
             const sql = `
         UPDATE users 
-        SET email_verification_token = ?, email_verification_expires_at = ?
-        WHERE id = ?
+        SET email_verification_token = $1, email_verification_expires_at = $2
+        WHERE id = $3
       `;
-            await pool.execute(sql, [token, expiresAt, id]);
+            await pool.query(sql, [token, expiresAt, id]);
 
             logger.info(`Email verification token set`, { userId: id });
         } catch (error) {
@@ -315,12 +316,12 @@ class UserRepository {
         SET is_email_verified = TRUE, 
             email_verification_token = NULL,
             email_verification_expires_at = NULL
-        WHERE email_verification_token = ? 
+        WHERE email_verification_token = $1 
           AND email_verification_expires_at > NOW()
       `;
-            const [result] = await pool.execute(sql, [token]);
+            const result = await pool.query(sql, [token]);
 
-            if (result.affectedRows > 0) {
+            if (result.rowCount > 0) {
                 logger.info(`Email verified successfully`, { token });
                 return true;
             }
@@ -345,10 +346,10 @@ class UserRepository {
         try {
             const sql = `
         UPDATE users 
-        SET password_reset_token = ?, password_reset_expires_at = ?
-        WHERE id = ?
+        SET password_reset_token = $1, password_reset_expires_at = $2
+        WHERE id = $3
       `;
-            await pool.execute(sql, [token, expiresAt, id]);
+            await pool.query(sql, [token, expiresAt, id]);
 
             logger.info(`Password reset token set`, { userId: id });
         } catch (error) {
@@ -370,10 +371,10 @@ class UserRepository {
             const sql = `
         SELECT id, name, email, role
         FROM users
-        WHERE password_reset_token = ? 
+        WHERE password_reset_token = $1 
           AND password_reset_expires_at > NOW()
       `;
-            const [rows] = await pool.execute(sql, [token]);
+            const { rows } = await pool.query(sql, [token]);
             return rows.length > 0 ? rows[0] : null;
         } catch (error) {
             logger.error(`Failed to find user by reset token: ${error.message}`, {
@@ -393,9 +394,9 @@ class UserRepository {
             const sql = `
         UPDATE users 
         SET password_reset_token = NULL, password_reset_expires_at = NULL
-        WHERE id = ?
+        WHERE id = $1
       `;
-            await pool.execute(sql, [id]);
+            await pool.query(sql, [id]);
 
             logger.info(`Password reset token cleared`, { userId: id });
         } catch (error) {
@@ -421,11 +422,11 @@ class UserRepository {
           id, name, email, role, is_active, is_email_verified,
           avatar_url, created_at, last_login_at
         FROM users
-        WHERE role = ?
+        WHERE role = $1
         ORDER BY created_at DESC
-        LIMIT ? OFFSET ?
+        LIMIT $2 OFFSET $3
       `;
-            const [rows] = await pool.execute(sql, [role, limit, offset]);
+            const { rows } = await pool.query(sql, [role, limit, offset]);
             return rows;
         } catch (error) {
             logger.error(`Failed to find users by role: ${error.message}`, {
@@ -443,12 +444,12 @@ class UserRepository {
      */
     static async deactivate(id) {
         try {
-            const sql = `UPDATE users SET is_active = FALSE WHERE id = ?`;
-            const [result] = await pool.execute(sql, [id]);
+            const sql = `UPDATE users SET is_active = FALSE WHERE id = $1`;
+            const result = await pool.query(sql, [id]);
 
             logger.warn(`User account deactivated`, { userId: id });
 
-            return result.affectedRows > 0;
+            return result.rowCount > 0;
         } catch (error) {
             logger.error(`Failed to deactivate user: ${error.message}`, {
                 userId: id,
@@ -465,12 +466,12 @@ class UserRepository {
      */
     static async activate(id) {
         try {
-            const sql = `UPDATE users SET is_active = TRUE WHERE id = ?`;
-            const [result] = await pool.execute(sql, [id]);
+            const sql = `UPDATE users SET is_active = TRUE WHERE id = $1`;
+            const result = await pool.query(sql, [id]);
 
             logger.info(`User account activated`, { userId: id });
 
-            return result.affectedRows > 0;
+            return result.rowCount > 0;
         } catch (error) {
             logger.error(`Failed to activate user: ${error.message}`, {
                 userId: id,

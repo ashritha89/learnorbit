@@ -1,6 +1,5 @@
 const path = require('path');
-const pool = require('../../config/db');
-const { v4: uuidv4 } = require('uuid');
+const pool = require('../../config/database');
 
 const { addWaitlistEmailJob } = require('../../queues/email.queue');
 
@@ -19,15 +18,14 @@ class MarketingService {
             source
         } = data;
 
-        const id = uuidv4();
         const sql = `
             INSERT INTO marketing_waitlist_users 
-            (id, full_name, email, role, current_lms, frustrations, desired_features, pricing_range, early_access, beta_tester, source, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')
+            (full_name, email, role, current_lms, frustrations, desired_features, pricing_range, early_access, beta_tester, source, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'new')
+            RETURNING id
         `;
 
         const values = [
-            id,
             fullName,
             email,
             role,
@@ -35,20 +33,35 @@ class MarketingService {
             JSON.stringify(frustrations || []),
             JSON.stringify(desiredFeatures || []),
             pricingExpectation || null,
-            earlyAccessInterest ? 1 : 0, // Boolean to 1/0
-            betaTester ? 1 : 0,        // Boolean to 1/0
+            !!earlyAccessInterest, // Ensure boolean
+            !!betaTester,          // Ensure boolean
             source || 'direct'
         ];
 
-        console.log('Inserting into waitlist:', values); // Debug log
+        console.log('Inserting into waitlist with values:', values); // Debug log
 
-        await pool.execute(sql, values);
+        try {
+            const result = await pool.query(sql, values);
+            console.log('Waitlist insert result:', result.rows[0]);
+            var id = result.rows[0].id;
+        } catch (dbError) {
+            console.error('Database insert error:', dbError);
+            throw dbError;
+        }
 
         try {
             // Add email job to queue - but don't fail the request if Redis is down
             await addWaitlistEmailJob({
                 fullName,
-                email
+                email,
+                role,
+                currentPlatform,
+                frustrations,
+                desiredFeatures,
+                pricingExpectation,
+                earlyAccessInterest,
+                betaTester,
+                source
             });
         } catch (queueError) {
             console.error('Failed to queue waitlist email (non-fatal):', queueError.message);
@@ -59,30 +72,28 @@ class MarketingService {
 
     async submitContactForm(data) {
         const { fullName, email, subject, message } = data;
-        const id = uuidv4();
-
         // Check dups within last hour to prevent spam? (Simplified for now)
 
         const sql = `
-      INSERT INTO marketing_contact_messages (id, full_name, email, subject, message, status)
-      VALUES (?, ?, ?, ?, ?, 'new')
+      INSERT INTO marketing_contact_messages (full_name, email, subject, message, status)
+      VALUES ($1, $2, $3, $4, 'new')
+      RETURNING id
     `;
 
-        await pool.execute(sql, [id, fullName, email, subject, message]);
-        return { id, status: 'sent' };
+        const result = await pool.query(sql, [fullName, email, subject, message]);
+        return { id: result.rows[0].id, status: 'sent' };
     }
 
     async submitFeedback(data) {
         const { userType, biggestProblem, missingFeature, improvementSuggestion } = data;
-        const id = uuidv4();
-
         const sql = `
-      INSERT INTO marketing_feedback_submissions (id, user_type, biggest_problem, missing_feature, improvement_suggestion)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO marketing_feedback_submissions (user_type, biggest_problem, missing_feature, improvement_suggestion)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id
     `;
 
-        await pool.execute(sql, [id, userType, biggestProblem || null, missingFeature || null, improvementSuggestion || null]);
-        return { id, status: 'received' };
+        const result = await pool.query(sql, [userType, biggestProblem || null, missingFeature || null, improvementSuggestion || null]);
+        return { id: result.rows[0].id, status: 'received' };
     }
 }
 

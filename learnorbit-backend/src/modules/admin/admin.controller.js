@@ -1,4 +1,4 @@
-const db = require('../../config/db');
+const db = require('../../config/database');
 const logger = require('../../utils/logger');
 
 /**
@@ -7,40 +7,40 @@ const logger = require('../../utils/logger');
 exports.getDashboardStats = async (req, res) => {
     try {
         // Get total users
-        const [totalUsersResult] = await db.query(
+        const totalUsersResult = await db.query(
             'SELECT COUNT(*) as count FROM users'
         );
-        const totalUsers = totalUsersResult[0].count;
+        const totalUsers = totalUsersResult.rows[0].count;
 
         // Get total students
-        const [totalStudentsResult] = await db.query(
+        const totalStudentsResult = await db.query(
             "SELECT COUNT(*) as count FROM users WHERE role = 'student'"
         );
-        const totalStudents = totalStudentsResult[0].count;
+        const totalStudents = totalStudentsResult.rows[0].count;
 
         // Get total instructors
-        const [totalInstructorsResult] = await db.query(
+        const totalInstructorsResult = await db.query(
             "SELECT COUNT(*) as count FROM users WHERE role = 'instructor'"
         );
-        const totalInstructors = totalInstructorsResult[0].count;
+        const totalInstructors = totalInstructorsResult.rows[0].count;
 
         // Get total courses
-        const [totalCoursesResult] = await db.query(
+        const totalCoursesResult = await db.query(
             'SELECT COUNT(*) as count FROM courses'
         );
-        const totalCourses = totalCoursesResult[0].count;
+        const totalCourses = totalCoursesResult.rows[0].count;
 
         // Get total published courses
-        const [totalPublishedResult] = await db.query(
+        const totalPublishedResult = await db.query(
             'SELECT COUNT(*) as count FROM courses WHERE is_published = TRUE'
         );
-        const totalPublishedCourses = totalPublishedResult[0].count;
+        const totalPublishedCourses = totalPublishedResult.rows[0].count;
 
         // Get total enrollments
-        const [totalEnrollmentsResult] = await db.query(
+        const totalEnrollmentsResult = await db.query(
             'SELECT COUNT(*) as count FROM enrollments'
         );
-        const totalEnrollments = totalEnrollmentsResult[0].count;
+        const totalEnrollments = totalEnrollmentsResult.rows[0].count;
 
         res.json({
             success: true,
@@ -68,7 +68,7 @@ exports.getDashboardStats = async (req, res) => {
 exports.getDashboardDetails = async (req, res) => {
     try {
         // Get recent users (last 5)
-        const [recentUsers] = await db.query(`
+        const { rows: recentUsers } = await db.query(`
             SELECT id, name, email, role, created_at as joinedAt
             FROM users
             ORDER BY created_at DESC
@@ -76,7 +76,7 @@ exports.getDashboardDetails = async (req, res) => {
         `);
 
         // Get recent courses (last 5)
-        const [recentCourses] = await db.query(`
+        const { rows: recentCourses } = await db.query(`
             SELECT 
                 c.id,
                 c.title,
@@ -89,7 +89,7 @@ exports.getDashboardDetails = async (req, res) => {
         `);
 
         // Get pending courses (drafts)
-        const [pendingCourses] = await db.query(`
+        const { rows: pendingCourses } = await db.query(`
             SELECT 
                 c.id,
                 c.title,
@@ -129,18 +129,18 @@ exports.getUsers = async (req, res) => {
         const params = [];
 
         if (role && role !== 'all') {
-            query += ' AND role = ?';
+            query += ` AND role = $${params.length + 1}`;
             params.push(role);
         }
 
         if (search) {
-            query += ' AND email LIKE ?';
+            query += ` AND email LIKE $${params.length + 1}`;
             params.push(`%${search}%`);
         }
 
         query += ' ORDER BY created_at DESC';
 
-        const [users] = await db.query(query, params);
+        const { rows: users } = await db.query(query, params);
 
         // Add status field (all users are active by default, blocking not implemented in schema)
         const usersWithStatus = users.map(user => ({
@@ -243,7 +243,7 @@ exports.getCourses = async (req, res) => {
         query += ' GROUP BY c.id, c.title, u.name, c.is_published, c.created_at';
         query += ' ORDER BY c.created_at DESC';
 
-        const [courses] = await db.query(query, params);
+        const { rows: courses } = await db.query(query, params);
 
         // Format status as 'published' or 'draft'
         const formattedCourses = courses.map(course => ({
@@ -273,7 +273,7 @@ exports.unpublishCourse = async (req, res) => {
         const { id } = req.params;
 
         await db.query(
-            'UPDATE courses SET is_published = FALSE WHERE id = ?',
+            'UPDATE courses SET is_published = FALSE WHERE id = $1',
             [id]
         );
 
@@ -300,13 +300,13 @@ exports.deleteCourse = async (req, res) => {
         const { id } = req.params;
 
         // Delete associated enrollments first
-        await db.query('DELETE FROM enrollments WHERE course_id = ?', [id]);
+        await db.query('DELETE FROM enrollments WHERE course_id = $1', [id]);
 
         // Delete associated lessons
-        await db.query('DELETE FROM lessons WHERE course_id = ?', [id]);
+        await db.query('DELETE FROM lessons WHERE course_id = $1', [id]);
 
         // Delete the course
-        await db.query('DELETE FROM courses WHERE id = ?', [id]);
+        await db.query('DELETE FROM courses WHERE id = $1', [id]);
 
         logger.info('Course deleted', { courseId: id, adminId: req.user.id });
 

@@ -1,5 +1,5 @@
 // src/modules/dashboard/dashboard.repository.js
-const pool = require('../../config/db');
+const pool = require('../../config/database');
 const logger = require('../../utils/logger');
 
 class DashboardRepository {
@@ -9,16 +9,16 @@ class DashboardRepository {
     const sql = `
       SELECT c.id AS course_id, c.title, c.thumbnail_url,
         COUNT(l.id) AS total_lessons,
-        SUM(CASE WHEN lp.completed = 1 THEN 1 ELSE 0 END) AS completed_lessons,
+        SUM(CASE WHEN lp.completed IS TRUE THEN 1 ELSE 0 END) AS completed_lessons,
         MAX(lp.updated_at) AS last_accessed_at
       FROM enrollments e
       JOIN courses c ON e.course_id = c.id
       LEFT JOIN lessons l ON l.course_id = c.id AND l.is_deleted = FALSE
-      LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = ?
-      WHERE e.user_id = ? AND (e.status = 'active' OR e.status = 'approved')
+      LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
+      WHERE e.user_id = $2 AND (e.status = 'active' OR e.status = 'approved')
       GROUP BY c.id, c.title, c.thumbnail_url
     `;
-    const [rows] = await pool.execute(sql, [userId, userId]);
+    const { rows } = await pool.query(sql, [userId, userId]);
     return rows;
   }
 
@@ -31,10 +31,10 @@ class DashboardRepository {
         SUM(CASE WHEN e.status = 'pending' THEN 1 ELSE 0 END) AS pending_enrollments
       FROM courses c
       LEFT JOIN enrollments e ON e.course_id = c.id
-      WHERE c.instructor_id = ?
+      WHERE c.instructor_id = $1
       GROUP BY c.id, c.title, c.thumbnail_url, c.is_published
     `;
-    const [rows] = await pool.execute(sql, [instructorId]);
+    const { rows } = await pool.query(sql, [instructorId]);
     return rows;
   }
 
@@ -49,7 +49,7 @@ class DashboardRepository {
         (SELECT COUNT(*) FROM enrollments) AS total_enrollments,
         (SELECT COUNT(*) FROM enrollments WHERE status = 'pending') AS pending_enrollments
       `;
-    const [rows] = await pool.execute(sql);
+    const { rows } = await pool.query(sql);
     return rows[0] || {};
   }
 
@@ -59,10 +59,10 @@ class DashboardRepository {
       SELECT lp.lesson_id, lp.updated_at
       FROM lesson_progress lp
       JOIN lessons l ON lp.lesson_id = l.id
-      WHERE lp.user_id = ? AND l.course_id = ?
+      WHERE lp.user_id = $1 AND l.course_id = $2
       ORDER BY lp.updated_at DESC
       LIMIT 1`;
-    const [rows] = await pool.execute(sql, [userId, courseId]);
+    const { rows } = await pool.query(sql, [userId, courseId]);
     return rows[0] || null;
   }
 }

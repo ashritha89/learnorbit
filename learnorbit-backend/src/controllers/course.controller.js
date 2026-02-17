@@ -1,5 +1,5 @@
 // src/controllers/course.controller.js
-const pool = require('../config/db');
+const pool = require('../config/database');
 const redis = require('../config/redisClient');
 const logger = require('../utils/logger');
 
@@ -47,7 +47,7 @@ exports.getAllCourses = async (req, res, next) => {
     }
 
     // Fetch from database
-    const [rows] = await pool.execute(
+    const { rows } = await pool.query(
       'SELECT id, title, description, start_date, end_date, is_active FROM courses WHERE is_active = TRUE'
     );
 
@@ -70,8 +70,8 @@ exports.getAllCourses = async (req, res, next) => {
 exports.getCourseById = async (req, res, next) => {
   const courseId = req.params.id;
   try {
-    const [rows] = await pool.execute(
-      'SELECT id, title, description, start_date, end_date, is_active FROM courses WHERE id = ? AND is_active = TRUE',
+    const { rows } = await pool.query(
+      'SELECT id, title, description, start_date, end_date, is_active FROM courses WHERE id = $1 AND is_active = TRUE',
       [courseId]
     );
     if (rows.length === 0) {
@@ -96,15 +96,15 @@ exports.createCourse = async (req, res, next) => {
   }
   const { title, description, start_date, end_date } = req.body;
   try {
-    const [result] = await pool.execute(
-      'INSERT INTO courses (title, description, start_date, end_date) VALUES (?, ?, ?, ?)',
+    const { rows } = await pool.query(
+      'INSERT INTO courses (title, description, start_date, end_date) VALUES ($1, $2, $3, $4) RETURNING id',
       [title, description || null, start_date || null, end_date || null]
     );
 
     // Invalidate cache
     await invalidateCourseCache();
 
-    res.status(201).json({ success: true, message: 'Course created', courseId: result.insertId });
+    res.status(201).json({ success: true, message: 'Course created', courseId: rows[0].id });
   } catch (err) {
     next(err);
   }
@@ -122,11 +122,11 @@ exports.updateCourse = async (req, res, next) => {
   }
   const { title, description, start_date, end_date, is_active } = req.body;
   try {
-    const [result] = await pool.execute(
-      `UPDATE courses SET title = ?, description = ?, start_date = ?, end_date = ?, is_active = ? WHERE id = ?`,
+    const result = await pool.query(
+      `UPDATE courses SET title = $1, description = $2, start_date = $3, end_date = $4, is_active = $5 WHERE id = $6`,
       [title, description || null, start_date || null, end_date || null, is_active !== undefined ? !!is_active : true, courseId]
     );
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'Course not found' });
     }
 
@@ -146,8 +146,8 @@ exports.updateCourse = async (req, res, next) => {
 exports.deleteCourse = async (req, res, next) => {
   const courseId = req.params.id;
   try {
-    const [result] = await pool.execute('UPDATE courses SET is_active = FALSE WHERE id = ?', [courseId]);
-    if (result.affectedRows === 0) {
+    const result = await pool.query('UPDATE courses SET is_active = FALSE WHERE id = $1', [courseId]);
+    if (result.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'Course not found' });
     }
 

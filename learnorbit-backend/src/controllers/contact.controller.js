@@ -1,5 +1,5 @@
 // src/controllers/contact.controller.js
-const pool = require('../config/db');
+const pool = require('../config/database');
 const { addContactEmailJob } = require('../queues/email.queue');
 const logger = require('../utils/logger');
 
@@ -9,9 +9,9 @@ module.exports = async function createContact(req, res) {
 
   try {
     // 1. Save contact lead to database
-    const sql = `INSERT INTO contact_leads (name, email, message, created_at) VALUES (?, ?, ?, NOW())`;
-    const [result] = await pool.execute(sql, [name, email, message || null]);
-    const leadId = result.insertId;
+    const sql = `INSERT INTO contact_leads (name, email, message, created_at) VALUES ($1, $2, $3, NOW()) RETURNING id`;
+    const { rows } = await pool.query(sql, [name, email, message || null]);
+    const leadId = rows[0].id;
 
     // 2. Add email job to queue (non-blocking)
     // This happens asynchronously and won't delay the API response
