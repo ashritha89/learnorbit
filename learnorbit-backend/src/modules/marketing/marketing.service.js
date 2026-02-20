@@ -55,6 +55,7 @@ class MarketingService {
             // We can await it or let it run in background. Since user wants to remove Redis, we process it now.
             // To prevent blocking response too long, maybe don't await? But for reliability without queue, awaiting is safer.
             // Or use setImmediate.
+            console.log(`[DEBUG] Attempting to send waitlist email to ${email}`);
             emailService.sendWaitlistEmail({
                 fullName,
                 email,
@@ -66,7 +67,9 @@ class MarketingService {
                 earlyAccessInterest,
                 betaTester,
                 source
-            }).catch(err => console.error('Background email send failed:', err));
+            })
+                .then(result => console.log(`[DEBUG] Email send result for ${email}:`, result))
+                .catch(err => console.error('[DEBUG] Background email send failed:', err));
 
         } catch (emailError) {
             console.error('Failed to initiate waitlist email:', emailError);
